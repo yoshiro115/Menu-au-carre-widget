@@ -21,11 +21,22 @@
    charte --ac-* correspondante : une table Menu sans ces colonnes, ou avec
    des cellules vides, donne exactement le rendu d'avant (aucune régression
    visuelle possible).
+
+   Variables ajoutées section 18 (2026-10-06) — police, dégradé de fond,
+   bordure/arrondi/ombre du bandeau — mêmes principes de repli :
+   --pm-police, --pm-taille-titre, --pm-graisse-titre (titre uniquement) ;
+   --pm-header-fond (dégradé complet, remplace --pm-fond pour le bandeau
+   seulement quand posé par construireStyleVariablesMenu) ;
+   --pm-bordure-epaisseur (0 si bordure désactivée) ; --pm-arrondi ;
+   --pm-ombre (absente = pas d'ombre, comme avant).
    ========================================================== */
 
 .pm-header{
-  background: var(--pm-fond, var(--ac-white)); color: var(--pm-texte, var(--ac-black)); padding: 0 24px;
-  border-bottom: 1.5px solid var(--pm-bordure, var(--ac-black));
+  background: var(--pm-header-fond, var(--pm-fond, var(--ac-white)));
+  color: var(--pm-texte, var(--ac-black)); padding: 0 24px;
+  border-bottom: var(--pm-bordure-epaisseur, 1.5px) solid var(--pm-bordure, var(--ac-black));
+  border-radius: var(--pm-arrondi, 0);
+  box-shadow: var(--pm-ombre, none);
   position: sticky; top: 0; z-index: 20;
 }
 .pm-header-inner{
@@ -39,7 +50,10 @@
 
 /* Titre — centré, table "Menu" colonne Titre. */
 .pm-titre{
-  flex: 1 1 auto; min-width: 0; text-align: center; font-size: 16px; font-weight: 700;
+  flex: 1 1 auto; min-width: 0; text-align: center;
+  font-family: var(--pm-police, inherit);
+  font-size: var(--pm-taille-titre, 16px);
+  font-weight: var(--pm-graisse-titre, 700);
   color: var(--pm-texte, var(--ac-black)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px;
 }
 
@@ -56,12 +70,23 @@
 
 .pm-portail-menu{
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; min-width: 220px;
-  background: var(--pm-fond, var(--ac-white)); border: 1.5px solid var(--pm-bordure, var(--ac-black)); border-radius: 8px;
+  background: var(--pm-fond, var(--ac-white));
+  border: var(--pm-bordure-epaisseur, 1.5px) solid var(--pm-bordure, var(--ac-black));
+  border-radius: var(--pm-arrondi, 8px);
   box-shadow: 4px 4px 0 var(--pm-bordure, var(--ac-black)); padding: 8px;
 }
-.pm-portail-menu a{ display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: var(--pm-texte, var(--ac-black)); font-size: 13.5px; font-weight: 500; }
+.pm-portail-menu a{
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px;
+  text-decoration: none; color: var(--pm-texte, var(--ac-black)); font-size: 13.5px; font-weight: 500;
+}
 .pm-portail-menu a:hover{ background: var(--pm-survol, var(--ac-grey-light)); }
 .pm-portail-vide{ padding: 8px 10px; font-size: 13px; color: var(--ac-grey-dark); }
+
+/* Icône par lien (section 18, colonne "IconeLien" de la table "Widget") —
+   facultative : un lien sans icône n'a simplement pas cet élément dans le
+   DOM (voir o.iconeDisponible dans le gabarit), aucune mise en page ne
+   dépend de sa présence. */
+.pm-lien-icone{ height: 18px; width: 18px; object-fit: contain; flex: none; }
 
 /* ==========================================================
    Accès restreint par rôle — gabarit générique (3 widgets : 2 personas)
