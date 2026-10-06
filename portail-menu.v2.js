@@ -19,8 +19,11 @@
 //     CouleurTexteTitre (section 21.5, facultative) : couleur INDÉPENDANTE
 //     du titre uniquement — si vide, retombe sur CouleurTexte (comportement
 //     d'avant, titre de la même couleur que le reste du texte du bandeau).
-//     Police (section 18, étendue section 19) : PoliceTitre (texte, ex.
-//     "Georgia, serif" — le nom CSS, utilisé tel quel) ; TaillePoliceTitre
+//     Police (section 18, étendue section 19, CORRIGÉE section 22) :
+//     PoliceTitre (texte, ex. "Georgia, serif" — le nom CSS, utilisé tel
+//     quel ; appliquée directement en JS, pas via menuStyleVars, car un nom
+//     de police contient presque toujours une virgule — voir section 22) ;
+//     TaillePoliceTitre
 //     (texte ou nombre, ex. "20" ou "20px") ; GraisseTitre (texte ou
 //     nombre, ex. "700" ou "bold") ; LienGoogleFontsTitre (texte,
 //     facultatif, section 19 — l'URL complète d'une feuille de style
@@ -52,8 +55,12 @@
 //   - "Widget" (une ligne par lien) : Titre (texte), Url (texte), Role
 //     (Choice List — choix multiple, optionnelle, section 15) : si vide,
 //     le lien est visible par tout le monde ; sinon seulement par les
-//     rôles cochés. NouvelOnglet (Toggle, section 18) : coché = ouvre
-//     dans un nouvel onglet, décoché/absent = même onglet (par défaut).
+//     rôles cochés. NouvelOnglet (Toggle, section 18, CORRIGÉ section 22) :
+//     coché = ouvre dans un nouvel onglet ("_blank"), décoché/absent =
+//     même onglet du navigateur (par défaut) — cible désormais "_top" et
+//     non "_self" (voir section 22 : le widget vit dans une iframe Grist,
+//     "_self" ne naviguait que CETTE iframe, jamais le véritable onglet du
+//     navigateur).
 //     IconeLien (pièce jointe, section 18, facultative) : icône affichée
 //     devant le nom du lien dans le menu déroulant. Inactif (Toggle,
 //     section 18) : coché = lien masqué du menu déroulant,
@@ -146,6 +153,29 @@ function chargerPolicePersonnalisee(url) {
   document.head.appendChild(lien);
 }
 
+// -- Application directe de la police du titre (CORRIGÉ section 22) -----
+// Colonne "PoliceTitre" de la table "Menu" (section 18.2) : un nom CSS de
+// police PRESQUE TOUJOURS composé de plusieurs noms séparés par des
+// virgules (ex. "Georgia, serif", "Playfair Display, serif") — exactement
+// le même piège que le dégradé de fond (section 21.1/21.2) : une valeur
+// contenant une virgule, empaquetée dans la chaîne unique posée sur
+// style="{{ menuStyleVars }}" par le moteur dc-runtime, casse
+// l'interpolation (confirmé pour le dégradé ; la police n'avait jamais
+// été testée en conditions réelles jusqu'ici, section 18.2 — elle avait
+// donc exactement le même défaut latent, jamais vu tant que personne
+// n'avait essayé de changer la police).
+//
+// Correctif : comme pour chargerPolicePersonnalisee ci-dessus, on pose la
+// variable --pm-police directement en JavaScript (document.documentElement
+// .style.setProperty), un effet de bord sur le DOM qui ne passe jamais par
+// la chaîne interpolée de dc-runtime — donc jamais soumis au même risque,
+// quel que soit le nombre de virgules dans la valeur. --pm-police n'est
+// PLUS posée par construireStyleVariablesMenu (voir plus bas).
+function appliquerPoliceTitre(policeTitre) {
+  if (!policeTitre || typeof policeTitre !== "string") return;
+  document.documentElement.style.setProperty("--pm-police", policeTitre.trim());
+}
+
 // -- Normalisation de l'alignement du titre (section 20) -----------------
 // Colonne "AlignementTitre" de la table "Menu" : une Choice column (choix
 // simple), qui renvoie directement la chaîne choisie via fetchTable — pas
@@ -207,6 +237,12 @@ async function chargerMenuLogique(etatActuel, appliquerEtat) {
     // Fait une seule fois ici, pas à chaque rendu, puisque chargerMenuLogique
     // lui-même n'est appelé qu'une fois par la garde en tête de fonction.
     chargerPolicePersonnalisee(table.LienGoogleFontsTitre?.[i]);
+    // Effet de bord volontaire également (section 22) : pose --pm-police
+    // directement sur le DOM plutôt que via menuStyleVars, car un nom de
+    // police contient presque toujours une virgule (voir le commentaire
+    // de la fonction). Fait ici, une seule fois, pour la même raison que
+    // chargerPolicePersonnalisee ci-dessus.
+    appliquerPoliceTitre(table.PoliceTitre?.[i]);
     appliquerEtat({
       menu: {
         titre: table.Titre[i] || "",
@@ -324,7 +360,18 @@ async function togglePortailLogiqueV2(etatActuel, appliquerEtat) {
       // Colonne facultative "NouvelOnglet" (Toggle, section 18) : absente
       // de la table ou décochée → même onglet par défaut (demandé par
       // l'humain). Cochée → nouvel onglet, comme avant.
-      targetAttr: table.NouvelOnglet?.[i] ? "_blank" : "_self",
+      //
+      // CORRIGÉ section 22 : "_self" cible le cadre COURANT, pas l'onglet
+      // du navigateur — or le widget vit lui-même dans une iframe Grist.
+      // Avec target="_self", le lien ne fait que naviguer CETTE iframe (le
+      // petit cadre du widget), jamais la vraie page/onglet du navigateur :
+      // vu de l'utilisateur, ça ne "marche pas" (rien ne semble se passer
+      // au bon endroit), ce qui peut expliquer que seuls les liens en
+      // target="_blank" semblaient "fonctionner" (nouvel onglet, le seul
+      // des deux qui sort réellement de l'iframe). "_top" cible le cadre
+      // RACINE de tout l'onglet du navigateur : c'est la bonne valeur pour
+      // "même onglet" quand on est dans une iframe imbriquée.
+      targetAttr: table.NouvelOnglet?.[i] ? "_blank" : "_top",
       // Icône par lien (section 18) — null si IconeLien absente/vide.
       iconeUrl: urlsIcones[i],
       iconeDisponible: !!urlsIcones[i],
@@ -430,8 +477,12 @@ function construireStyleVariablesMenu(menu) {
   // de texte partagée, comme avant.
   if (menu.couleurTexteTitre) variables.push(["--pm-titre-texte", menu.couleurTexteTitre]);
 
-  // Police du titre.
-  if (menu.policeTitre) variables.push(["--pm-police", menu.policeTitre]);
+  // Police du titre — --pm-police N'EST PLUS posée ici (section 22) :
+  // menu.policeTitre contient presque toujours une virgule ("Georgia,
+  // serif"), donc elle est appliquée directement sur le DOM par
+  // appliquerPoliceTitre (voir chargerMenuLogique), jamais via cette
+  // chaîne interpolée. Taille et graisse n'ont pas ce problème (valeurs
+  // atomiques, ex. "20px", "700").
   if (menu.taillePoliceTitre) variables.push(["--pm-taille-titre", menu.taillePoliceTitre]);
   if (menu.graisseTitre) variables.push(["--pm-graisse-titre", menu.graisseTitre]);
   if (menu.alignementTitre) variables.push(["--pm-titre-align", menu.alignementTitre]);
