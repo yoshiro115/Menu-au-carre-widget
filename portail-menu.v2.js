@@ -10,8 +10,15 @@
 // Deux tables attendues dans CHAQUE document qui charge ce fichier :
 //   - "Menu"   (une seule ligne) : Titre (texte), Logo (pièce jointe),
 //     Icone (pièce jointe), + colonnes visuelles optionnelles.
-//     Couleurs (section 15) : CouleurFond, CouleurTexte, CouleurBordure,
-//     CouleurSurvol, CouleurAccent — texte, hex ou vide.
+//     Couleurs (section 15, étendue section 21) : CouleurFond, CouleurTexte,
+//     CouleurBordure, CouleurSurvol, CouleurAccent — texte, hex ou vide.
+//     CouleurFondSousMenu, CouleurTexteSousMenu (section 21, facultatives) :
+//     couleurs INDÉPENDANTES pour le menu déroulant (sous-menu) — si vides,
+//     retombent sur CouleurFond/CouleurTexte (comportement d'avant,
+//     couleurs partagées entre le bandeau et le sous-menu).
+//     CouleurTexteTitre (section 21.5, facultative) : couleur INDÉPENDANTE
+//     du titre uniquement — si vide, retombe sur CouleurTexte (comportement
+//     d'avant, titre de la même couleur que le reste du texte du bandeau).
 //     Police (section 18, étendue section 19) : PoliceTitre (texte, ex.
 //     "Georgia, serif" — le nom CSS, utilisé tel quel) ; TaillePoliceTitre
 //     (texte ou nombre, ex. "20" ou "20px") ; GraisseTitre (texte ou
@@ -25,9 +32,9 @@
 //     Alignement du titre (section 20) : AlignementTitre (Choice — choix
 //     simple, pas Choice List — "Gauche"/"Centre"/"Droite", facultatif,
 //     repli "Centre" comme avant si vide/absente/non reconnue).
-//     Dégradé de fond (section 18) : CouleurFondDegrade (texte, hex ou
-//     vide — 2e couleur du dégradé, la 1re étant CouleurFond) et
-//     DirectionDegrade (texte, ex. "to right", "135deg" — optionnelle,
+//     Dégradé de fond (section 18, corrigé section 21) : CouleurFondDegrade
+//     (texte, hex ou vide — 2e couleur du dégradé, la 1re étant CouleurFond)
+//     et DirectionDegrade (texte, ex. "to right", "135deg" — optionnelle,
 //     repli "to right" si CouleurFondDegrade est rempli mais pas la
 //     direction).
 //     Bordure / arrondi / ombre du bandeau (section 18) :
@@ -37,6 +44,11 @@
 //     nombre, ex. "8" ou "8px" — coins arrondis du bandeau et du menu
 //     déroulant), OmbreActive (Toggle — coché = ombre portée sous le
 //     bandeau, décoché/absent = pas d'ombre, comme avant).
+//     OmbreSousMenuDesactivee (Toggle, section 21.6, facultative) : coché
+//     = retire l'ombre décalée fixe du sous-menu (menu déroulant) ;
+//     décoché/absent = ombre du sous-menu normale, comme avant.
+//     Totalement indépendante de OmbreActive, qui ne pilote QUE le
+//     bandeau.
 //   - "Widget" (une ligne par lien) : Titre (texte), Url (texte), Role
 //     (Choice List — choix multiple, optionnelle, section 15) : si vide,
 //     le lien est visible par tout le monde ; sinon seulement par les
@@ -206,6 +218,14 @@ async function chargerMenuLogique(etatActuel, appliquerEtat) {
         couleurBordure: table.CouleurBordure?.[i] || "",
         couleurSurvol: table.CouleurSurvol?.[i] || "",
         couleurAccent: table.CouleurAccent?.[i] || "",
+        // Couleurs indépendantes du sous-menu (section 21) — vides par
+        // défaut, ce qui fait retomber construireStyleVariablesMenu sur
+        // CouleurFond/CouleurTexte (comportement partagé d'avant).
+        couleurFondSousMenu: table.CouleurFondSousMenu?.[i] || "",
+        couleurTexteSousMenu: table.CouleurTexteSousMenu?.[i] || "",
+        // Couleur dédiée au titre (section 21.5) — indépendante de
+        // CouleurTexte (qui reste le repli si celle-ci est vide).
+        couleurTexteTitre: table.CouleurTexteTitre?.[i] || "",
         // Police du titre (section 18).
         policeTitre: table.PoliceTitre?.[i] || "",
         taillePoliceTitre: valeurCssAvecPx(table.TaillePoliceTitre?.[i]),
@@ -227,7 +247,17 @@ async function chargerMenuLogique(etatActuel, appliquerEtat) {
         bordureDesactivee: !!table.BordureDesactivee?.[i],
         epaisseurBordure: valeurCssAvecPx(table.EpaisseurBordure?.[i]),
         arrondiBandeau: valeurCssAvecPx(table.ArrondiBandeau?.[i]),
-        ombreActive: !!table.OmbreActive?.[i]
+        ombreActive: !!table.OmbreActive?.[i],
+        // Section 21.6 — le sous-menu a TOUJOURS eu sa propre ombre portée
+        // fixe (l'effet "décalé" 4px/4px, hérité de la v1), totalement
+        // indépendante de OmbreActive (qui ne pilote que le bandeau) :
+        // --pm-ombre n'est référencée nulle part dans la règle CSS du
+        // sous-menu. OmbreSousMenuDesactivee permet de la retirer si elle
+        // n'est pas souhaitée, sans toucher à OmbreActive ni à aucune autre
+        // variable partagée. Nom inversé volontaire (même raison que
+        // BordureDesactivee/Inactif) : décoché/absent = ombre du sous-menu
+        // normale, comme avant.
+        ombreSousMenuDesactivee: !!table.OmbreSousMenuDesactivee?.[i]
       },
       menuLogoUrl,
       menuIconeUrl,
@@ -355,13 +385,23 @@ function construireTitreAffiche(menu, titreWidget) {
 // pour les nouvelles variables sans équivalent --ac-*), donc une case vide
 // ou une colonne absente ne change rien au rendu existant.
 //
-// Dégradé de fond (section 18) : si CouleurFondDegrade est rempli, on
-// calcule --pm-header-fond = un gradient CSS complet qui REMPLACE le
-// simple --pm-fond pour le fond du bandeau (portail-menu.v2.css applique
-// --pm-header-fond en priorité s'il est présent). Il faut au moins
-// couleurFond rempli pour construire un dégradé cohérent (2 couleurs) ;
-// sinon on ignore couleurFondDegrade plutôt que de deviner une couleur de
-// départ.
+// Dégradé de fond (section 18, CORRIGÉ section 21) : si CouleurFondDegrade
+// est rempli, on pose trois variables ATOMIQUES (une couleur de départ,
+// une couleur d'arrivée, une direction) plutôt qu'une seule variable
+// contenant la fonction CSS complète `linear-gradient(direction, c1, c2)`.
+// Raison du changement : la toute première version posait directement
+// --pm-header-fond: linear-gradient(to right, #00FFFF, #FFFFFF) dans la
+// chaîne packée menuStyleVars — une valeur contenant des VIRGULES à
+// l'intérieur d'une seule déclaration CSS. Testé en conditions réelles
+// (section 21) : le bandeau restait blanc au lieu d'afficher le dégradé,
+// alors que les variables SANS virgule (couleurs simples, alignement...)
+// fonctionnaient très bien. Le moteur x-dc (dc-runtime) semble donc mal
+// gérer une valeur de variable CSS contenant une virgule à l'intérieur de
+// l'attribut `style="{{ menuStyleVars }}"` interpolé globalement. Le
+// correctif déplace la fonction `linear-gradient(...)` elle-même dans
+// portail-menu.v2.css (statique, jamais interpolée), et ne fait passer par
+// menuStyleVars que des valeurs ATOMIQUES sans virgule (couleurs hex,
+// mots-clés de direction comme "to right" ou angles comme "135deg").
 //
 // Bordure (section 18) : BordureDesactivee coché force --pm-bordure-
 // epaisseur à "0" (bandeau sans bordure), quelle que soit EpaisseurBordure.
@@ -379,17 +419,31 @@ function construireStyleVariablesMenu(menu) {
   if (menu.couleurSurvol) variables.push(["--pm-survol", menu.couleurSurvol]);
   if (menu.couleurAccent) variables.push(["--pm-accent", menu.couleurAccent]);
 
+  // Couleurs indépendantes du sous-menu (section 21) — si vides, les
+  // repli CSS correspondants (var(--pm-sousmenu-fond, var(--pm-fond, ...)))
+  // retombent sur les couleurs du bandeau, comme avant.
+  if (menu.couleurFondSousMenu) variables.push(["--pm-sousmenu-fond", menu.couleurFondSousMenu]);
+  if (menu.couleurTexteSousMenu) variables.push(["--pm-sousmenu-texte", menu.couleurTexteSousMenu]);
+
+  // Couleur dédiée au titre (section 21.5) — si vide, le repli CSS
+  // (var(--pm-titre-texte, var(--pm-texte, ...))) retombe sur la couleur
+  // de texte partagée, comme avant.
+  if (menu.couleurTexteTitre) variables.push(["--pm-titre-texte", menu.couleurTexteTitre]);
+
   // Police du titre.
   if (menu.policeTitre) variables.push(["--pm-police", menu.policeTitre]);
   if (menu.taillePoliceTitre) variables.push(["--pm-taille-titre", menu.taillePoliceTitre]);
   if (menu.graisseTitre) variables.push(["--pm-graisse-titre", menu.graisseTitre]);
   if (menu.alignementTitre) variables.push(["--pm-titre-align", menu.alignementTitre]);
 
-  // Dégradé de fond — remplace --pm-fond pour le bandeau uniquement si les
-  // deux couleurs sont disponibles.
+  // Dégradé de fond — trois variables atomiques (section 21), consommées
+  // par le linear-gradient() statique de portail-menu.v2.css. Seulement si
+  // les deux couleurs sont disponibles (sinon --pm-fond seul suffit, comme
+  // avant la section 18).
   if (menu.couleurFondDegrade && menu.couleurFond) {
-    const direction = menu.directionDegrade || "to right";
-    variables.push(["--pm-header-fond", `linear-gradient(${direction}, ${menu.couleurFond}, ${menu.couleurFondDegrade})`]);
+    variables.push(["--pm-degrade-depart", menu.couleurFond]);
+    variables.push(["--pm-degrade-arrivee", menu.couleurFondDegrade]);
+    variables.push(["--pm-degrade-direction", menu.directionDegrade || "to right"]);
   }
 
   // Bordure / arrondi / ombre.
@@ -400,6 +454,12 @@ function construireStyleVariablesMenu(menu) {
   }
   if (menu.arrondiBandeau) variables.push(["--pm-arrondi", menu.arrondiBandeau]);
   if (menu.ombreActive) variables.push(["--pm-ombre", "0 4px 10px rgba(9, 12, 11, 0.18)"]);
+
+  // Ombre du sous-menu (section 21.6) — indépendante de --pm-ombre
+  // (bandeau). Cochée → --pm-sousmenu-ombre forcé à "none" (sous-menu sans
+  // ombre du tout) ; décochée/absente → variable non posée, le repli CSS
+  // conserve l'ombre décalée fixe d'origine (comportement d'avant).
+  if (menu.ombreSousMenuDesactivee) variables.push(["--pm-sousmenu-ombre", "none"]);
 
   return variables.map(([variable, valeur]) => `${variable}:${valeur}`).join(";");
 }

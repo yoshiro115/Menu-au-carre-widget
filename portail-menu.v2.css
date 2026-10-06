@@ -25,14 +25,49 @@
    Variables ajoutées section 18 (2026-10-06) — police, dégradé de fond,
    bordure/arrondi/ombre du bandeau — mêmes principes de repli :
    --pm-police, --pm-taille-titre, --pm-graisse-titre (titre uniquement) ;
-   --pm-header-fond (dégradé complet, remplace --pm-fond pour le bandeau
-   seulement quand posé par construireStyleVariablesMenu) ;
    --pm-bordure-epaisseur (0 si bordure désactivée) ; --pm-arrondi ;
    --pm-ombre (absente = pas d'ombre, comme avant).
+
+   CORRIGÉ section 21 (2026-10-06) — le dégradé de fond n'est PLUS une
+   seule variable --pm-header-fond contenant la fonction CSS complète
+   (ex: "linear-gradient(to right, #00FFFF, #FFFFFF)"). Cette valeur
+   contient une virgule ; une fois empaquetée dans la chaîne unique posée
+   sur style="{{ menuStyleVars }}" par le moteur dc-runtime, elle semble
+   casser l'interpolation (ou rendre la déclaration CSS invalide), et le
+   bandeau restait blanc au lieu d'afficher le dégradé (confirmé par
+   capture d'écran utilisateur, alignement du titre lui fonctionnant bien
+   à côté — seule différence : pas de virgule dans cette valeur-là).
+   Le correctif : construireStyleVariablesMenu ne pose plus que des
+   variables atomiques SANS virgule — --pm-degrade-depart,
+   --pm-degrade-arrivee, --pm-degrade-direction (un mot-clé type
+   "to right", jamais la fonction entière) — et c'est CE fichier CSS, de
+   façon statique (jamais interpolé par dc-runtime), qui assemble le
+   linear-gradient() final dans la règle .pm-header ci-dessous. Non
+   vérifié en conditions réelles depuis cette session (pas d'accès à
+   Grist) : à reconfirmer par l'utilisateur après livraison.
+
+   Section 21 — couleurs indépendantes du sous-menu (dropdown) : colonnes
+   "CouleurFondSousMenu" et "CouleurTexteSousMenu" de la table "Menu".
+   Nouvelles variables --pm-sousmenu-fond / --pm-sousmenu-texte, chacune
+   avec repli sur les couleurs partagées --pm-fond / --pm-texte (donc sur
+   --ac-white / --ac-black en bout de chaîne) : une table Menu sans ces
+   colonnes, ou avec ces cellules vides, donne exactement le rendu
+   d'avant (sous-menu de la même couleur que le bandeau, comme en v1/v2
+   initiale).
+
+   Section 21.5 — couleur indépendante du titre : colonne
+   "CouleurTexteTitre" de la table "Menu". Nouvelle variable
+   --pm-titre-texte, avec repli sur --pm-texte (donc sur --ac-black en
+   bout de chaîne) : vide/absente, le titre garde la couleur de texte
+   partagée du bandeau, comme avant.
    ========================================================== */
 
 .pm-header{
-  background: var(--pm-header-fond, var(--pm-fond, var(--ac-white)));
+  background: linear-gradient(
+    var(--pm-degrade-direction, to right),
+    var(--pm-degrade-depart, var(--pm-fond, var(--ac-white))),
+    var(--pm-degrade-arrivee, var(--pm-fond, var(--ac-white)))
+  );
   color: var(--pm-texte, var(--ac-black)); padding: 0 24px;
   border-bottom: var(--pm-bordure-epaisseur, 1.5px) solid var(--pm-bordure, var(--ac-black));
   border-radius: var(--pm-arrondi, 0);
@@ -54,7 +89,7 @@
   font-family: var(--pm-police, inherit);
   font-size: var(--pm-taille-titre, 16px);
   font-weight: var(--pm-graisse-titre, 700);
-  color: var(--pm-texte, var(--ac-black)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px;
+  color: var(--pm-titre-texte, var(--pm-texte, var(--ac-black))); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px;
 }
 
 /* Burger — déclenche le menu déroulant, table "Menu" colonne Icone. */
@@ -70,14 +105,14 @@
 
 .pm-portail-menu{
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; min-width: 220px;
-  background: var(--pm-fond, var(--ac-white));
+  background: var(--pm-sousmenu-fond, var(--pm-fond, var(--ac-white)));
   border: var(--pm-bordure-epaisseur, 1.5px) solid var(--pm-bordure, var(--ac-black));
   border-radius: var(--pm-arrondi, 8px);
-  box-shadow: 4px 4px 0 var(--pm-bordure, var(--ac-black)); padding: 8px;
+  box-shadow: var(--pm-sousmenu-ombre, 4px 4px 0 var(--pm-bordure, var(--ac-black))); padding: 8px;
 }
 .pm-portail-menu a{
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px;
-  text-decoration: none; color: var(--pm-texte, var(--ac-black)); font-size: 13.5px; font-weight: 500;
+  text-decoration: none; color: var(--pm-sousmenu-texte, var(--pm-texte, var(--ac-black))); font-size: 13.5px; font-weight: 500;
 }
 .pm-portail-menu a:hover{ background: var(--pm-survol, var(--ac-grey-light)); }
 .pm-portail-vide{ padding: 8px 10px; font-size: 13px; color: var(--ac-grey-dark); }
