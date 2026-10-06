@@ -12,10 +12,20 @@
    Préfixe "pm-" (portail-menu), volontairement distinct du préfixe propre
    à chaque widget (ac-/rc-/rs-.../gw*-), pour ne jamais entrer en conflit
    avec ses propres styles.
+
+   Variables visuelles pilotables depuis la table "Menu" du document
+   (2026-10-06, voir section 15 du contexte projet) : chaque widget pose un
+   style inline sur <header class="pm-header" style="{{ menuStyleVars }}">
+   contenant les seules variables --pm-* renseignées dans la ligne Menu
+   (couleurs vides ignorées). Chaque variable a un repli sur la couleur de
+   charte --ac-* correspondante : une table Menu sans ces colonnes, ou avec
+   des cellules vides, donne exactement le rendu d'avant (aucune régression
+   visuelle possible).
    ========================================================== */
 
 .pm-header{
-  background: var(--ac-white); color: var(--ac-black); padding: 0 24px; border-bottom: 1.5px solid var(--ac-black);
+  background: var(--pm-fond, var(--ac-white)); color: var(--pm-texte, var(--ac-black)); padding: 0 24px;
+  border-bottom: 1.5px solid var(--pm-bordure, var(--ac-black));
   position: sticky; top: 0; z-index: 20;
 }
 .pm-header-inner{
@@ -30,7 +40,7 @@
 /* Titre — centré, table "Menu" colonne Titre. */
 .pm-titre{
   flex: 1 1 auto; min-width: 0; text-align: center; font-size: 16px; font-weight: 700;
-  color: var(--ac-black); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px;
+  color: var(--pm-texte, var(--ac-black)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px;
 }
 
 /* Burger — déclenche le menu déroulant, table "Menu" colonne Icone. */
@@ -40,17 +50,17 @@
   padding: 6px; border-radius: 8px; cursor: pointer; background: none; border: none; transition: background .15s ease;
 }
 /* off-white et non white : le bandeau lui-même est blanc, un survol blanc serait invisible. */
-.pm-burger-btn:hover, .pm-burger-btn:focus-visible{ background: var(--ac-off-white); }
+.pm-burger-btn:hover, .pm-burger-btn:focus-visible{ background: var(--pm-survol, var(--ac-off-white)); }
 .pm-burger-icone{ height: 28px; width: 28px; object-fit: contain; display: block; }
-.pm-burger-repli{ font-size: 24px; color: var(--ac-black); line-height: 1; }
+.pm-burger-repli{ font-size: 24px; color: var(--pm-accent, var(--ac-black)); line-height: 1; }
 
 .pm-portail-menu{
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; min-width: 220px;
-  background: var(--ac-white); border: 1.5px solid var(--ac-black); border-radius: 8px;
-  box-shadow: 4px 4px 0 var(--ac-black); padding: 8px;
+  background: var(--pm-fond, var(--ac-white)); border: 1.5px solid var(--pm-bordure, var(--ac-black)); border-radius: 8px;
+  box-shadow: 4px 4px 0 var(--pm-bordure, var(--ac-black)); padding: 8px;
 }
-.pm-portail-menu a{ display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: var(--ac-black); font-size: 13.5px; font-weight: 500; }
-.pm-portail-menu a:hover{ background: var(--ac-grey-light); }
+.pm-portail-menu a{ display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: var(--pm-texte, var(--ac-black)); font-size: 13.5px; font-weight: 500; }
+.pm-portail-menu a:hover{ background: var(--pm-survol, var(--ac-grey-light)); }
 .pm-portail-vide{ padding: 8px 10px; font-size: 13px; color: var(--ac-grey-dark); }
 
 /* ==========================================================
