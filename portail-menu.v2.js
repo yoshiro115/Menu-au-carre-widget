@@ -59,12 +59,17 @@
 //   - "Widget" (une ligne par lien) : Titre (texte), Url (texte), Role
 //     (Choice List — choix multiple, optionnelle, section 15) : si vide,
 //     le lien est visible par tout le monde ; sinon seulement par les
-//     rôles cochés. NouvelOnglet (Toggle, section 18, CORRIGÉ section 22) :
-//     coché = ouvre dans un nouvel onglet ("_blank"), décoché/absent =
-//     même onglet du navigateur (par défaut) — cible désormais "_top" et
-//     non "_self" (voir section 22 : le widget vit dans une iframe Grist,
-//     "_self" ne naviguait que CETTE iframe, jamais le véritable onglet du
-//     navigateur).
+//     rôles cochés. NouvelOnglet (Toggle, section 18, CORRIGÉ section 22,
+//     COMPLÉTÉ section 25) : coché = ouvre dans un nouvel onglet ("_blank"),
+//     décoché/absent = même onglet du navigateur (par défaut). Le clic est
+//     géré en JS depuis la section 25 (creerGestionnaireClicLien, gabarit :
+//     onClick="{{ o.onClicLien }}") car l'attribut target seul ("_top"
+//     depuis la section 22) ne suffit pas toujours — certains contextes
+//     (sandbox de l'éditeur de widget Grist, entre autres) peuvent bloquer
+//     toute navigation du cadre racine et faire ouvrir un nouvel onglet
+//     malgré tout, quelle que soit la valeur de target. Le JS tente une
+//     navigation plus directe, avec un filet de sécurité qui garantit de
+//     ne jamais ouvrir de nouvel onglet par surprise.
 //     IconeLien (pièce jointe, section 18, facultative) : icône affichée
 //     devant le nom du lien dans le menu déroulant. Inactif (Toggle,
 //     section 18) : coché = lien masqué du menu déroulant,
@@ -489,6 +494,67 @@ function ajouterParametreEmbed(url, moiRole) {
   }
 }
 
+// -- Clic sur un lien du menu : navigation gérée en JS (section 25) -----
+// AVANT cette section, "même onglet" reposait uniquement sur l'attribut
+// `target="{{ o.targetAttr }}"` de l'ancre (section 22, "_top" au lieu de
+// "_self"). Problème signalé par l'humain : le lien ouvre quand même
+// systématiquement un nouvel onglet, y compris avec "_top" — aussi bien
+// via l'éditeur de widget intégré de Grist ("coller le code") que, pour
+// les futurs projets, potentiellement via d'autres hébergements. Diagnostic
+// le plus probable (non confirmé en conditions réelles depuis cette
+// session, faute d'accès à un navigateur réel) : le widget tourne dans une
+// iframe "sandboxée" par Grist (restriction de sécurité pour empêcher un
+// widget tiers de naviguer toute la page à sa place) — et quand une
+// navigation vers le cadre racine (`_top`) est interdite par cette sandbox,
+// le navigateur peut, selon les cas, soit ne rien faire du tout, soit
+// retomber sur l'ouverture d'un nouvel onglet. Aucune valeur de l'attribut
+// `target` ne peut changer ce comportement : c'est le navigateur qui
+// décide, pas notre code.
+//
+// Palliatif appliqué ici : au lieu de compter uniquement sur l'attribut
+// `target`, le clic est intercepté en JavaScript (onClick) pour tenter une
+// navigation plus directe de `window.top`, avec un filet de sécurité qui
+// garantit qu'on n'ouvre JAMAIS un nouvel onglet par surprise, même si la
+// vraie navigation "même onglet" reste bloquée par une sandbox :
+//   1. Un `setTimeout` de secours est programmé AVANT la tentative de
+//      navigation. Si la navigation de window.top réussit vraiment, la
+//      page actuelle est déchargée et ce timeout ne s'exécute jamais (il
+//      n'a tout simplement plus le temps). S'il se déclenche quand même
+//      400ms plus tard, c'est la preuve que rien ne s'est passé — dans ce
+//      cas, on navigue au moins l'iframe du widget elle-même (comportement
+//      de secours, pas idéal mais jamais un nouvel onglet imprévu).
+//   2. Si l'assignation à `window.top.location.href` lève une exception
+//      JavaScript immédiatement (cas où le navigateur signale clairement
+//      le blocage plutôt que de l'ignorer silencieusement), le filet de
+//      secours est déclenché tout de suite, sans attendre les 400ms.
+// Cas "_blank" (nouvel onglet demandé explicitement via NouvelOnglet,
+// section 18.1) : cette fonction ne fait rien et laisse l'ancre agir
+// normalement — target="_blank" fonctionne déjà (confirmé par l'humain),
+// aucune raison d'intervenir dessus.
+// ⚠️ Non vérifié en conditions réelles depuis cette session (pas d'accès à
+// un navigateur réel) : c'est le meilleur palliatif disponible compte tenu
+// du diagnostic ci-dessus, mais si la sandbox bloque vraiment TOUTE
+// navigation de window.top sans lever d'erreur ET sans qu'aucun délai ne
+// change rien, le résultat restera "navigation de l'iframe du widget
+// seule" (comme l'ancien bug de la section 22 avec target="_self") — pas
+// un vrai "même onglet du navigateur", mais jamais de nouvel onglet
+// surprise non plus, ce qui est déjà une amélioration mesurable.
+function creerGestionnaireClicLien(url, targetAttr) {
+  return function gererClicLien(event) {
+    if (targetAttr === "_blank") return; // laisse l'ancre agir normalement
+    if (event && typeof event.preventDefault === "function") event.preventDefault();
+    const filetDeSecours = setTimeout(() => {
+      window.location.href = url;
+    }, 400);
+    try {
+      window.top.location.href = url;
+    } catch (e) {
+      clearTimeout(filetDeSecours);
+      window.location.href = url;
+    }
+  };
+}
+
 // -- Titre composé "Titre Menu - Titre widget" ---------------------------
 // Si la table Menu fournit un titre ET que le widget a son propre nom
 // (NOM_OUTIL), on les combine. Si l'un des deux manque, on retombe sur
@@ -609,10 +675,17 @@ function calculerPortailRenderValsV2(etat, onTogglePortailFn, options) {
   // (section 24) — dans cet ordre, pour ne jamais perdre de temps à
   // transformer l'URL d'un lien qui sera de toute façon masqué.
   const outilsVisibles = filtrerOutilsParRole(etat.portailOutils, opts.moiRole);
-  const outilsAvecEmbed = outilsVisibles.map(o => ({
-    ...o,
-    url: ajouterParametreEmbed(o.url, opts.moiRole)
-  }));
+  const outilsAvecEmbed = outilsVisibles.map(o => {
+    const urlFinale = ajouterParametreEmbed(o.url, opts.moiRole);
+    return {
+      ...o,
+      url: urlFinale,
+      // Clic géré en JS (section 25) — voir creerGestionnaireClicLien :
+      // calculé sur l'URL FINALE (avec embed=true déjà ajouté si
+      // applicable), pour que la navigation en JS ouvre bien la bonne URL.
+      onClicLien: creerGestionnaireClicLien(urlFinale, o.targetAttr)
+    };
+  });
   return {
     portailOuvert: etat.portailOuvert,
     portailOuvertAttr: etat.portailOuvert ? "true" : "false",
