@@ -12,9 +12,19 @@
 //     Icone (pièce jointe), + colonnes visuelles optionnelles.
 //     Couleurs (section 15) : CouleurFond, CouleurTexte, CouleurBordure,
 //     CouleurSurvol, CouleurAccent — texte, hex ou vide.
-//     Police (section 18) : PoliceTitre (texte, ex. "Georgia, serif"),
-//     TaillePoliceTitre (texte ou nombre, ex. "20" ou "20px"),
-//     GraisseTitre (texte ou nombre, ex. "700" ou "bold").
+//     Police (section 18, étendue section 19) : PoliceTitre (texte, ex.
+//     "Georgia, serif" — le nom CSS, utilisé tel quel) ; TaillePoliceTitre
+//     (texte ou nombre, ex. "20" ou "20px") ; GraisseTitre (texte ou
+//     nombre, ex. "700" ou "bold") ; LienGoogleFontsTitre (texte,
+//     facultatif, section 19 — l'URL complète d'une feuille de style
+//     Google Fonts, ex. "https://fonts.googleapis.com/css2?family=Playfair
+//     +Display:wght@700&display=swap" : chargée automatiquement dans la
+//     page si remplie, pour que PoliceTitre soit garantie disponible sans
+//     dépendre des polices déjà installées chez la personne qui regarde
+//     le widget).
+//     Alignement du titre (section 20) : AlignementTitre (Choice — choix
+//     simple, pas Choice List — "Gauche"/"Centre"/"Droite", facultatif,
+//     repli "Centre" comme avant si vide/absente/non reconnue).
 //     Dégradé de fond (section 18) : CouleurFondDegrade (texte, hex ou
 //     vide — 2e couleur du dégradé, la 1re étant CouleurFond) et
 //     DirectionDegrade (texte, ex. "to right", "135deg" — optionnelle,
@@ -93,6 +103,55 @@ function valeurCssAvecPx(valeurCellule) {
   return /^-?\d+(\.\d+)?$/.test(brut) ? `${brut}px` : brut;
 }
 
+// -- Chargement dynamique d'une police Google Fonts (section 19) --------
+// Injecte un <link rel="stylesheet"> vers l'URL fournie dans la colonne
+// "LienGoogleFontsTitre" de la table "Menu", s'il n'est pas déjà présent
+// (évite les doublons si la fonction est appelée plusieurs fois). Ça rend
+// PoliceTitre fiable même si la police n'est pas déjà installée chez la
+// personne qui regarde le widget — exactement le même principe que la
+// balise <link href="https://fonts.googleapis.com/..."> déjà posée en dur
+// dans le <head> de chaque widget pour Montserrat (voir section 4), sauf
+// que celle-ci est posée dynamiquement, au moment du chargement du menu,
+// à partir de ce que l'humain a tapé dans la table — aucune police
+// supplémentaire à coder en dur dans les widgets.
+//
+// Validation volontairement simple : on exige juste une URL "https://"
+// (pas uniquement un domaine Google Fonts) pour rester utilisable avec
+// d'autres fournisseurs de polices web qui donnent aussi un lien de
+// feuille de style (ex. Adobe Fonts) — l'important est que ce soit une
+// VRAIE URL de feuille de style, jamais un chemin local ni du code.
+function chargerPolicePersonnalisee(url) {
+  if (!url || typeof url !== "string") return;
+  const urlPropre = url.trim();
+  if (!/^https:\/\//i.test(urlPropre)) return;
+  // Pas de doublon si déjà injecté (ex. si le hook de montage est rappelé).
+  const dejaPresent = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .some(lien => lien.href === urlPropre);
+  if (dejaPresent) return;
+  const lien = document.createElement("link");
+  lien.rel = "stylesheet";
+  lien.href = urlPropre;
+  document.head.appendChild(lien);
+}
+
+// -- Normalisation de l'alignement du titre (section 20) -----------------
+// Colonne "AlignementTitre" de la table "Menu" : une Choice column (choix
+// simple), qui renvoie directement la chaîne choisie via fetchTable — pas
+// de décodage "L" comme pour une Choice List (plusieurs choix, utilisée
+// pour "Role" sur la table "Widget", voir listeValeursChoix ci-dessus).
+// Accepte indifféremment la casse et les mots anglais/français ; toute
+// valeur vide ou non reconnue renvoie "" (chaîne vide), ce qui laisse la
+// variable CSS --pm-titre-align non posée et retombe sur le repli "center"
+// — exactement le rendu d'avant.
+function normaliserAlignementTitre(valeur) {
+  if (!valeur || typeof valeur !== "string") return "";
+  const v = valeur.trim().toLowerCase();
+  if (v === "gauche" || v === "left") return "left";
+  if (v === "droite" || v === "right") return "right";
+  if (v === "centre" || v === "center") return "center";
+  return "";
+}
+
 // ⚠️ À VÉRIFIER avec votre instance Grist (grist.aucarre.tech) avant mise
 // en service : construit l'URL de téléchargement d'une pièce jointe via un
 // jeton d'accès temporaire. `grist.docApi.getAccessToken` est la méthode
@@ -131,6 +190,11 @@ async function chargerMenuLogique(etatActuel, appliquerEtat) {
       urlPieceJointe(idLogo),
       urlPieceJointe(idIcone)
     ]);
+    // Effet de bord volontaire (pas un setState) : injecte la police
+    // personnalisée dans le <head> si la colonne est remplie (section 19).
+    // Fait une seule fois ici, pas à chaque rendu, puisque chargerMenuLogique
+    // lui-même n'est appelé qu'une fois par la garde en tête de fonction.
+    chargerPolicePersonnalisee(table.LienGoogleFontsTitre?.[i]);
     appliquerEtat({
       menu: {
         titre: table.Titre[i] || "",
@@ -146,6 +210,14 @@ async function chargerMenuLogique(etatActuel, appliquerEtat) {
         policeTitre: table.PoliceTitre?.[i] || "",
         taillePoliceTitre: valeurCssAvecPx(table.TaillePoliceTitre?.[i]),
         graisseTitre: table.GraisseTitre?.[i] ? String(table.GraisseTitre[i]).trim() : "",
+        // Lien Google Fonts (ou équivalent) pour charger PoliceTitre
+        // automatiquement (section 19) — gardé dans l'état pour mémoire,
+        // mais le chargement lui-même (effet de bord sur le <head>) est
+        // déclenché juste en dessous, pas ici.
+        lienGoogleFontsTitre: table.LienGoogleFontsTitre?.[i] || "",
+        // Alignement du titre (section 20) : "" si vide/absente/non
+        // reconnue, ce qui laisse le repli CSS "center" s'appliquer.
+        alignementTitre: normaliserAlignementTitre(table.AlignementTitre?.[i]),
         // Dégradé de fond du bandeau (section 18) : 2e couleur + direction,
         // la 1re couleur étant couleurFond ci-dessus.
         couleurFondDegrade: table.CouleurFondDegrade?.[i] || "",
@@ -311,6 +383,7 @@ function construireStyleVariablesMenu(menu) {
   if (menu.policeTitre) variables.push(["--pm-police", menu.policeTitre]);
   if (menu.taillePoliceTitre) variables.push(["--pm-taille-titre", menu.taillePoliceTitre]);
   if (menu.graisseTitre) variables.push(["--pm-graisse-titre", menu.graisseTitre]);
+  if (menu.alignementTitre) variables.push(["--pm-titre-align", menu.alignementTitre]);
 
   // Dégradé de fond — remplace --pm-fond pour le bandeau uniquement si les
   // deux couleurs sont disponibles.

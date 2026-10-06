@@ -50,7 +50,7 @@
 
 /* Titre — centré, table "Menu" colonne Titre. */
 .pm-titre{
-  flex: 1 1 auto; min-width: 0; text-align: center;
+  flex: 1 1 auto; min-width: 0; text-align: var(--pm-titre-align, center);
   font-family: var(--pm-police, inherit);
   font-size: var(--pm-taille-titre, 16px);
   font-weight: var(--pm-graisse-titre, 700);
