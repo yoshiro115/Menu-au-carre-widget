@@ -60,6 +60,14 @@
    --pm-titre-texte, avec repli sur --pm-texte (donc sur --ac-black en
    bout de chaîne) : vide/absente, le titre garde la couleur de texte
    partagée du bandeau, comme avant.
+
+   Section 23 (2026-10-06) — taille du logo par niveaux : colonne
+   "TailleLogo" de la table "Menu" (nombre entier, facultatif). Nouvelle
+   variable --pm-logo-hauteur, calculée côté JS (portail-menu.v2.js,
+   calculerHauteurLogoPx) à partir d'un NIVEAU relatif à la taille d'avant
+   (0/vide = 48px inchangé, +1 = +25%, -1 = -25%, etc.), jamais une valeur
+   CSS à virgule : posée telle quelle (ex. "60px") sur .pm-brand-logo
+   ci-dessous. Vide/absente → repli 48px, comportement d'avant inchangé.
    ========================================================== */
 
 .pm-header{
@@ -81,7 +89,7 @@
 
 /* Logo — simple affichage, table "Menu" colonne Logo, plus de bouton ni de menu accroché ici. */
 .pm-brand{ display: flex; align-items: center; flex: none; }
-.pm-brand-logo{ height: 48px; width: auto; max-width: 160px; display: block; object-fit: contain; }
+.pm-brand-logo{ height: var(--pm-logo-hauteur, 48px); width: auto; max-width: 160px; display: block; object-fit: contain; }
 
 /* Titre — centré, table "Menu" colonne Titre. */
 .pm-titre{

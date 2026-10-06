@@ -52,6 +52,10 @@
 //     décoché/absent = ombre du sous-menu normale, comme avant.
 //     Totalement indépendante de OmbreActive, qui ne pilote QUE le
 //     bandeau.
+//     TailleLogo (section 23, facultative, nombre entier) : niveau relatif
+//     de taille du logo, PAS une taille en pixels — 0/vide = taille d'avant
+//     (48px) inchangée ; chaque +1 = +25% ; chaque -1 = -25% (négatif
+//     accepté). Voir calculerHauteurLogoPx.
 //   - "Widget" (une ligne par lien) : Titre (texte), Url (texte), Role
 //     (Choice List — choix multiple, optionnelle, section 15) : si vide,
 //     le lien est visible par tout le monde ; sinon seulement par les
@@ -194,6 +198,24 @@ function normaliserAlignementTitre(valeur) {
   return "";
 }
 
+// -- Taille du logo par "niveaux" (section 23) ---------------------------
+// Colonne "TailleLogo" de la table "Menu" : un NOMBRE ENTIER (Grist Number),
+// facultatif — pas une taille en pixels à deviner, un simple niveau relatif
+// à la taille d'avant (48px) : 0 ou vide = taille d'avant, inchangée ; +1 =
+// +25% ; +2 = +50% ; -1 = -25% ; etc. (négatif accepté, pour rapetisser).
+// Choisi plutôt qu'une taille en pixels directe parce que l'humain n'a pas
+// à connaître/retenir la taille de base ni à faire le calcul lui-même — il
+// tape juste "le logo est un peu petit, +1" ou "beaucoup trop gros, -2".
+// Formule : facteur = 1 + (niveau * 0.25), plancher à 0.1 (jamais 0 ni
+// négatif, qui ferait disparaître le logo) pour un niveau très négatif.
+function calculerHauteurLogoPx(niveauBrut) {
+  if (niveauBrut === undefined || niveauBrut === null || niveauBrut === "") return "";
+  const niveau = Number(niveauBrut);
+  if (!Number.isFinite(niveau)) return "";
+  const facteur = Math.max(1 + (niveau * 0.25), 0.1);
+  return `${Math.round(48 * facteur)}px`;
+}
+
 // ⚠️ À VÉRIFIER avec votre instance Grist (grist.aucarre.tech) avant mise
 // en service : construit l'URL de téléchargement d'une pièce jointe via un
 // jeton d'accès temporaire. `grist.docApi.getAccessToken` est la méthode
@@ -293,7 +315,11 @@ async function chargerMenuLogique(etatActuel, appliquerEtat) {
         // variable partagée. Nom inversé volontaire (même raison que
         // BordureDesactivee/Inactif) : décoché/absent = ombre du sous-menu
         // normale, comme avant.
-        ombreSousMenuDesactivee: !!table.OmbreSousMenuDesactivee?.[i]
+        ombreSousMenuDesactivee: !!table.OmbreSousMenuDesactivee?.[i],
+        // Taille du logo par niveaux (section 23) — "" si vide/non
+        // numérique, ce qui laisse --pm-logo-hauteur non posée et retombe
+        // sur le repli CSS 48px (comportement d'avant, inchangé).
+        hauteurLogo: calculerHauteurLogoPx(table.TailleLogo?.[i])
       },
       menuLogoUrl,
       menuIconeUrl,
@@ -511,6 +537,11 @@ function construireStyleVariablesMenu(menu) {
   // ombre du tout) ; décochée/absente → variable non posée, le repli CSS
   // conserve l'ombre décalée fixe d'origine (comportement d'avant).
   if (menu.ombreSousMenuDesactivee) variables.push(["--pm-sousmenu-ombre", "none"]);
+
+  // Taille du logo par niveaux (section 23) — valeur déjà calculée en px
+  // (ex. "60px"), atomique et sans virgule : aucun risque du bug des
+  // sections 21.1/22.1 ici.
+  if (menu.hauteurLogo) variables.push(["--pm-logo-hauteur", menu.hauteurLogo]);
 
   return variables.map(([variable, valeur]) => `${variable}:${valeur}`).join(";");
 }
