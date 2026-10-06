@@ -78,6 +78,14 @@
 // rôle) reste propre à chaque widget — ce fichier reçoit juste le rôle de
 // la personne (moiRole) en paramètre de calculerPortailRenderValsV2 pour
 // filtrer la liste des liens ; il ne fait pas lui-même l'identification.
+//
+// Masquage de l'interface Grist sur les liens du menu (section 24,
+// 2026-10-06) : calculerPortailRenderValsV2 ajoute automatiquement le
+// paramètre d'URL "embed=true" à chaque lien (table Widget, colonne Url)
+// AVANT de l'exposer au gabarit — SAUF pour le rôle exact "Développeur"
+// (moiRole), qui garde l'interface Grist complète. Voir
+// ajouterParametreEmbed. ⚠️ Paramètre "embed=true" non vérifié contre
+// grist.aucarre.tech depuis cette session.
 // ==========================================================
 
 const ETAT_INITIAL_PORTAIL_V2 = {
@@ -441,6 +449,46 @@ function filtrerOutilsParRole(outils, moiRole) {
   return outils.filter(o => !o.roles || o.roles.length === 0 || (!!moiRole && o.roles.includes(moiRole)));
 }
 
+// -- Paramètre d'URL pour masquer l'interface Grist (section 24) --------
+// Grist accepte un paramètre d'URL "embed=true" qui masque sa propre
+// interface (barre du haut, menus Grist) quand le document est ouvert
+// dans un cadre imbriqué — pratique pour qu'un lien du menu déroulant
+// ouvre une page Grist "propre", sans les commandes internes de Grist
+// autour. ⚠️ Non vérifié contre grist.aucarre.tech depuis cette session
+// (aucun accès à une instance Grist réelle) : c'est le paramètre
+// documenté pour ce usage, mais à confirmer par l'humain au premier
+// essai — si le nom ou la valeur exacte diffère sur cette instance,
+// seule cette fonction est à adapter, rien d'autre n'en dépend (même
+// principe que urlPieceJointe, section 13).
+//
+// Règle demandée par l'humain : n'ajoute JAMAIS ce paramètre pour le
+// rôle "Développeur" (comparaison exacte, sensible à la casse, comme le
+// reste des comparaisons de rôle de ce fichier — voir filtrerOutilsParRole
+// ci-dessus) : cette personne doit continuer à voir l'interface Grist
+// complète (barre du haut, accès aux réglages, etc.). Pour tout autre
+// rôle (ou moiRole absent/non défini), le paramètre est ajouté s'il n'y
+// est pas déjà — une URL qui le contient déjà (quelle que soit sa valeur)
+// n'est jamais modifiée, pour respecter un choix explicite déjà fait par
+// l'humain dans la table Widget.
+//
+// Robustesse (section 11) : une URL invalide/malformée (qui ferait
+// échouer `new URL(...)`) est renvoyée telle quelle plutôt que de risquer
+// de casser le lien — mieux vaut un lien avec l'interface Grist visible
+// qu'un lien cassé.
+function ajouterParametreEmbed(url, moiRole) {
+  if (moiRole === "Développeur") return url; // rôle exempté, voir commentaire ci-dessus
+  if (!url || typeof url !== "string") return url;
+  try {
+    const u = new URL(url);
+    if (!u.searchParams.has("embed")) {
+      u.searchParams.set("embed", "true");
+    }
+    return u.toString();
+  } catch (e) {
+    return url;
+  }
+}
+
 // -- Titre composé "Titre Menu - Titre widget" ---------------------------
 // Si la table Menu fournit un titre ET que le widget a son propre nom
 // (NOM_OUTIL), on les combine. Si l'un des deux manque, on retombe sur
@@ -557,12 +605,20 @@ function construireStyleVariablesMenu(menu) {
 //   };
 function calculerPortailRenderValsV2(etat, onTogglePortailFn, options) {
   const opts = options || {};
+  // Filtre par rôle (section 15.1) PUIS ajoute "embed=true" aux URLs
+  // (section 24) — dans cet ordre, pour ne jamais perdre de temps à
+  // transformer l'URL d'un lien qui sera de toute façon masqué.
+  const outilsVisibles = filtrerOutilsParRole(etat.portailOutils, opts.moiRole);
+  const outilsAvecEmbed = outilsVisibles.map(o => ({
+    ...o,
+    url: ajouterParametreEmbed(o.url, opts.moiRole)
+  }));
   return {
     portailOuvert: etat.portailOuvert,
     portailOuvertAttr: etat.portailOuvert ? "true" : "false",
     portailChargement: etat.portailChargement,
     portailErreur: etat.portailErreur,
-    portailOutils: filtrerOutilsParRole(etat.portailOutils, opts.moiRole),
+    portailOutils: outilsAvecEmbed,
     onTogglePortail: onTogglePortailFn,
     menuTitre: construireTitreAffiche(etat.menu, opts.titreWidget),
     menuLogoUrl: etat.menuLogoUrl,
