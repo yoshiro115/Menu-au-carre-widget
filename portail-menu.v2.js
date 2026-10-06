@@ -85,12 +85,12 @@
 // filtrer la liste des liens ; il ne fait pas lui-même l'identification.
 //
 // Masquage de l'interface Grist sur les liens du menu (section 24,
-// 2026-10-06) : calculerPortailRenderValsV2 ajoute automatiquement le
-// paramètre d'URL "embed=true" à chaque lien (table Widget, colonne Url)
-// AVANT de l'exposer au gabarit — SAUF pour le rôle exact "Développeur"
-// (moiRole), qui garde l'interface Grist complète. Voir
-// ajouterParametreEmbed. ⚠️ Paramètre "embed=true" non vérifié contre
-// grist.aucarre.tech depuis cette session.
+// 2026-10-06) : fonctionnalité abandonnée et entièrement retirée du code
+// (section 26, 2026-10-06) — "embed=true" n'était que cosmétique et
+// trivialement retirable par n'importe quel utilisateur depuis l'URL,
+// donc ça ne protégeait rien. Les URLs des liens (table Widget, colonne
+// Url) sont de nouveau exposées telles quelles, sans modification. Voir
+// section 26 du contexte projet pour le détail.
 // ==========================================================
 
 const ETAT_INITIAL_PORTAIL_V2 = {
@@ -454,46 +454,6 @@ function filtrerOutilsParRole(outils, moiRole) {
   return outils.filter(o => !o.roles || o.roles.length === 0 || (!!moiRole && o.roles.includes(moiRole)));
 }
 
-// -- Paramètre d'URL pour masquer l'interface Grist (section 24) --------
-// Grist accepte un paramètre d'URL "embed=true" qui masque sa propre
-// interface (barre du haut, menus Grist) quand le document est ouvert
-// dans un cadre imbriqué — pratique pour qu'un lien du menu déroulant
-// ouvre une page Grist "propre", sans les commandes internes de Grist
-// autour. ⚠️ Non vérifié contre grist.aucarre.tech depuis cette session
-// (aucun accès à une instance Grist réelle) : c'est le paramètre
-// documenté pour ce usage, mais à confirmer par l'humain au premier
-// essai — si le nom ou la valeur exacte diffère sur cette instance,
-// seule cette fonction est à adapter, rien d'autre n'en dépend (même
-// principe que urlPieceJointe, section 13).
-//
-// Règle demandée par l'humain : n'ajoute JAMAIS ce paramètre pour le
-// rôle "Développeur" (comparaison exacte, sensible à la casse, comme le
-// reste des comparaisons de rôle de ce fichier — voir filtrerOutilsParRole
-// ci-dessus) : cette personne doit continuer à voir l'interface Grist
-// complète (barre du haut, accès aux réglages, etc.). Pour tout autre
-// rôle (ou moiRole absent/non défini), le paramètre est ajouté s'il n'y
-// est pas déjà — une URL qui le contient déjà (quelle que soit sa valeur)
-// n'est jamais modifiée, pour respecter un choix explicite déjà fait par
-// l'humain dans la table Widget.
-//
-// Robustesse (section 11) : une URL invalide/malformée (qui ferait
-// échouer `new URL(...)`) est renvoyée telle quelle plutôt que de risquer
-// de casser le lien — mieux vaut un lien avec l'interface Grist visible
-// qu'un lien cassé.
-function ajouterParametreEmbed(url, moiRole) {
-  if (moiRole === "Développeur") return url; // rôle exempté, voir commentaire ci-dessus
-  if (!url || typeof url !== "string") return url;
-  try {
-    const u = new URL(url);
-    if (!u.searchParams.has("embed")) {
-      u.searchParams.set("embed", "true");
-    }
-    return u.toString();
-  } catch (e) {
-    return url;
-  }
-}
-
 // -- Clic sur un lien du menu : navigation gérée en JS (section 25) -----
 // AVANT cette section, "même onglet" reposait uniquement sur l'attribut
 // `target="{{ o.targetAttr }}"` de l'ancre (section 22, "_top" au lieu de
@@ -671,27 +631,21 @@ function construireStyleVariablesMenu(menu) {
 //   };
 function calculerPortailRenderValsV2(etat, onTogglePortailFn, options) {
   const opts = options || {};
-  // Filtre par rôle (section 15.1) PUIS ajoute "embed=true" aux URLs
-  // (section 24) — dans cet ordre, pour ne jamais perdre de temps à
-  // transformer l'URL d'un lien qui sera de toute façon masqué.
+  // Filtre par rôle (section 15.1). Le paramètre "embed=true" (section 24)
+  // a été retiré (section 26) : les URLs des liens ne sont plus modifiées.
   const outilsVisibles = filtrerOutilsParRole(etat.portailOutils, opts.moiRole);
-  const outilsAvecEmbed = outilsVisibles.map(o => {
-    const urlFinale = ajouterParametreEmbed(o.url, opts.moiRole);
-    return {
-      ...o,
-      url: urlFinale,
-      // Clic géré en JS (section 25) — voir creerGestionnaireClicLien :
-      // calculé sur l'URL FINALE (avec embed=true déjà ajouté si
-      // applicable), pour que la navigation en JS ouvre bien la bonne URL.
-      onClicLien: creerGestionnaireClicLien(urlFinale, o.targetAttr)
-    };
-  });
+  const outilsAvecClic = outilsVisibles.map(o => ({
+    ...o,
+    // Clic géré en JS (section 25) — voir creerGestionnaireClicLien :
+    // calculé directement sur l'URL d'origine (table Widget, colonne Url).
+    onClicLien: creerGestionnaireClicLien(o.url, o.targetAttr)
+  }));
   return {
     portailOuvert: etat.portailOuvert,
     portailOuvertAttr: etat.portailOuvert ? "true" : "false",
     portailChargement: etat.portailChargement,
     portailErreur: etat.portailErreur,
-    portailOutils: outilsAvecEmbed,
+    portailOutils: outilsAvecClic,
     onTogglePortail: onTogglePortailFn,
     menuTitre: construireTitreAffiche(etat.menu, opts.titreWidget),
     menuLogoUrl: etat.menuLogoUrl,
